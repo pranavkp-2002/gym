@@ -4,13 +4,14 @@ import { buttonVariants } from "@/components/ui/button";
 import { ApiError, exercisesApi, statsApi } from "@/lib/api";
 import { humanize } from "@/lib/format";
 import { getUserToday } from "@/lib/today";
+import { MuscleGroupChips } from "@/components/exercises/muscle-group-chips";
 import { ExercisePicker } from "./exercise-picker";
 import { RangeTabs } from "./range-tabs";
 import { RecordTiles } from "./record-tiles";
 import { RecordsTable } from "./records-table";
 import { SessionHistory } from "./session-history";
 import { SessionMetricChart, StrengthChart } from "./progress-charts";
-import { parseRange, rangeStart } from "./ranges";
+import { parseRange, progressHref, rangeStart } from "./ranges";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -22,23 +23,54 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Server Component: everything is driven by ?exercise=<id>&range=<key>. */
+/** Server Component: everything is driven by ?muscleGroup=<group>&exercise=<id>&range=<key>. */
 export async function ProgressView({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
   const range = parseRange(params.range);
   const exerciseId = typeof params.exercise === "string" ? params.exercise : undefined;
 
-  const [allExercises, records] = await Promise.all([
+  const [allExercises, allRecords, options] = await Promise.all([
     exercisesApi.list({}, "include"),
     statsApi.records(),
+    exercisesApi.options(),
   ]);
-  const loggedIds = new Set(records.map((r) => r.exerciseId));
+  const muscleGroup =
+    typeof params.muscleGroup === "string" && options.muscleGroups.includes(params.muscleGroup)
+      ? params.muscleGroup
+      : undefined;
+  const inGroup = (e: { muscleGroup: string }) => !muscleGroup || e.muscleGroup === muscleGroup;
+
+  const loggedIds = new Set(allRecords.map((r) => r.exerciseId));
   // Hidden exercises stay pickable only if they have history to show.
-  const exercises = allExercises.filter((e) => !e.hidden || loggedIds.has(e.id));
-  const known = exerciseId && exercises.some((e) => e.id === exerciseId) ? exerciseId : undefined;
+  const usable = allExercises.filter((e) => !e.hidden || loggedIds.has(e.id));
+  const known = exerciseId && usable.some((e) => e.id === exerciseId) ? exerciseId : undefined;
+  const selectedGroup = usable.find((e) => e.id === known)?.muscleGroup;
+  // The selected exercise stays in the picker even if the filter excludes it.
+  const exercises = usable.filter((e) => inGroup(e) || e.id === known);
+  const records = allRecords.filter(inGroup);
 
   const picker = (
-    <ExercisePicker exercises={exercises} loggedIds={loggedIds} selected={known} range={range} />
+    <div className="space-y-3">
+      <MuscleGroupChips
+        groups={options.muscleGroups}
+        active={muscleGroup}
+        // Keep the open exercise only if it belongs to the chosen group.
+        hrefFor={(group) =>
+          progressHref({
+            muscleGroup: group,
+            exercise: !group || group === selectedGroup ? known : undefined,
+            range,
+          })
+        }
+      />
+      <ExercisePicker
+        exercises={exercises}
+        loggedIds={loggedIds}
+        selected={known}
+        range={range}
+        muscleGroup={muscleGroup}
+      />
+    </div>
   );
 
   // No (valid) exercise chosen: personal records overview.
@@ -46,15 +78,17 @@ export async function ProgressView({ searchParams }: { searchParams: Promise<Sea
     return (
       <div className="space-y-4">
         {picker}
-        {records.length === 0 ? (
+        {allRecords.length === 0 ? (
           <Empty>
             No workouts logged yet. Your personal records will show up here.
             <div>
               <Link href="/log" className={cn(buttonVariants(), "mt-4")}>Log a workout</Link>
             </div>
           </Empty>
+        ) : records.length === 0 ? (
+          <Empty>No {humanize(muscleGroup!)} exercises logged yet.</Empty>
         ) : (
-          <RecordsTable records={records} />
+          <RecordsTable records={records} muscleGroup={muscleGroup} />
         )}
       </div>
     );
@@ -85,7 +119,7 @@ export async function ProgressView({ searchParams }: { searchParams: Promise<Sea
             {totalSessions === 1 ? "" : "s"} logged
           </p>
         </div>
-        {totalSessions > 0 && <RangeTabs exercise={known} range={range} />}
+        {totalSessions > 0 && <RangeTabs exercise={known} range={range} muscleGroup={muscleGroup} />}
       </header>
 
       {totalSessions === 0 ? (

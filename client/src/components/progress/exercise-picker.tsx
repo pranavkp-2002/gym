@@ -7,6 +7,7 @@ import type { RangeKey } from "./ranges";
 /**
  * Server Component: a plain GET form, so picking an exercise is a normal
  * navigation to /progress?exercise=<id> and works without JavaScript.
+ * The muscle-group filter (if any) is carried along as a hidden field.
  * Exercises you've logged are listed first.
  */
 export function ExercisePicker({
@@ -14,11 +15,14 @@ export function ExercisePicker({
   loggedIds,
   selected,
   range,
+  muscleGroup,
 }: {
   exercises: Exercise[];
   loggedIds: Set<string>;
   selected?: string;
   range: RangeKey;
+  /** Active muscle-group filter; `exercises` is already narrowed to it. */
+  muscleGroup?: string;
 }) {
   const logged = exercises.filter((e) => loggedIds.has(e.id));
   const groups = new Map<string, Exercise[]>();
@@ -28,6 +32,7 @@ export function ExercisePicker({
 
   return (
     <form action="/progress" className="flex gap-2">
+      {muscleGroup && <input type="hidden" name="muscleGroup" value={muscleGroup} />}
       {range !== "all" && <input type="hidden" name="range" value={range} />}
       <NativeSelect
         // Remount when the selection changes: an uncontrolled <select> keeps

@@ -29,7 +29,8 @@ async function WorkoutDetail({ params }: { params: Promise<{ id: string }> }) {
           <ConfirmDeleteButton
             action={deleteWorkout}
             id={workout.id}
-            confirmMessage={`Delete "${workout.name}"? This can't be undone.`}
+            title="Delete workout?"
+            confirmMessage={`"${workout.name}" and all its sets will be deleted. This can't be undone.`}
             label="Delete"
             showLabel
           />

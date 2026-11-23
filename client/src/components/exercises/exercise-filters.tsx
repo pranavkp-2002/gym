@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/form/native-select";
+import { MuscleGroupChips } from "./muscle-group-chips";
 import { humanize } from "@/lib/format";
 import type { ExerciseFilters, ExerciseOptions } from "@/lib/types";
 
@@ -83,26 +83,11 @@ export function ExerciseFiltersBar({
         )}
       </form>
 
-      <nav aria-label="Filter by muscle group" className="flex flex-wrap gap-1.5">
-        {[undefined, ...options.muscleGroups].map((group) => {
-          const active = filters.muscleGroup === group;
-          return (
-            <Link
-              key={group ?? "all"}
-              href={filterHref(filters, { muscleGroup: group })}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs transition-colors",
-                active
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {group ? humanize(group) : "All"}
-            </Link>
-          );
-        })}
-      </nav>
+      <MuscleGroupChips
+        groups={options.muscleGroups}
+        active={filters.muscleGroup}
+        hrefFor={(group) => filterHref(filters, { muscleGroup: group })}
+      />
     </div>
   );
 }

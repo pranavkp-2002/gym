@@ -1,12 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { humanize } from "@/lib/format";
 import type { Exercise } from "@/lib/types";
-import { ConfirmDeleteButton } from "@/components/form/confirm-delete-button";
 import { EyeOff } from "lucide-react";
+import { ConfirmDeleteButton } from "@/components/form/confirm-delete-button";
 import { deleteExercise, hideExercise } from "@/lib/actions/exercises";
 import { ExerciseActionButton } from "./exercise-action-button";
 
-/** Server Component: pure rendering, no client JS except the delete/hide buttons. */
+/** Server Component: pure rendering, no client JS except the delete/hide/inactive buttons. */
 export function ExerciseList({ exercises }: { exercises: Exercise[] }) {
   if (exercises.length === 0) {
     return (
@@ -39,12 +39,21 @@ export function ExerciseList({ exercises }: { exercises: Exercise[] }) {
               </p>
             </div>
             {exercise.isCustom ? (
-              <ConfirmDeleteButton
-                action={deleteExercise}
-                id={exercise.id}
-                confirmMessage={`Delete "${exercise.name}"?`}
-                label={`Delete ${exercise.name}`}
-              />
+              <div className="flex items-center gap-1">
+                <ExerciseActionButton
+                  action={hideExercise}
+                  id={exercise.id}
+                  label={`Mark ${exercise.name} inactive`}
+                  icon={<EyeOff />}
+                />
+                <ConfirmDeleteButton
+                  action={deleteExercise}
+                  id={exercise.id}
+                  title="Delete exercise?"
+                  confirmMessage={`"${exercise.name}" will be permanently removed from your library.`}
+                  label={`Delete ${exercise.name}`}
+                />
+              </div>
             ) : (
               <ExerciseActionButton
                 action={hideExercise}

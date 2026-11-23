@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Save, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { saveWorkout } from "@/lib/actions/workouts";
 import { formatKg } from "@/lib/format";
 import {
@@ -79,11 +80,6 @@ export function WorkoutDraftCard({ exerciseNames }: { exerciseNames: Record<stri
     });
   };
 
-  const handleDelete = () => {
-    if (!confirm("Delete this draft workout? This can't be undone.")) return;
-    clearDraft();
-  };
-
   return (
     <section
       aria-label="Draft workout"
@@ -111,17 +107,23 @@ export function WorkoutDraftCard({ exerciseNames }: { exerciseNames: Record<stri
           <Link href="/log" className={buttonVariants({ variant: "secondary", size: "sm" })}>
             <Pencil /> Continue
           </Link>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={handleDelete}
-            disabled={saving}
-            aria-label="Delete draft"
-            title="Delete draft"
-          >
-            <Trash2 />
-          </Button>
+          <ConfirmDialog
+            title="Delete draft workout?"
+            description="Your unsaved exercises and sets will be lost. This can't be undone."
+            onConfirm={clearDraft}
+            trigger={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={saving}
+                aria-label="Delete draft"
+                title="Delete draft"
+              >
+                <Trash2 />
+              </Button>
+            }
+          />
         </div>
       </div>
       {error && (

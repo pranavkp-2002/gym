@@ -1,4 +1,5 @@
 // Time ranges for the progress page (?range=3m). Records are always all-time.
+// The page also takes ?exercise=<id> and ?muscleGroup=<group>.
 
 export const RANGES = [
   { key: "1m", label: "1M", months: 1 },
@@ -23,8 +24,11 @@ export function rangeStart(range: RangeKey, today: string): string | undefined {
   return d.toISOString().slice(0, 10);
 }
 
-export function progressHref(exercise: string | undefined, range: RangeKey) {
+export type ProgressParams = { exercise?: string; range?: RangeKey; muscleGroup?: string };
+
+export function progressHref({ exercise, range = "all", muscleGroup }: ProgressParams) {
   const qs = new URLSearchParams();
+  if (muscleGroup) qs.set("muscleGroup", muscleGroup);
   if (exercise) qs.set("exercise", exercise);
   if (range !== "all") qs.set("range", range);
   const s = qs.toString();

@@ -74,7 +74,10 @@ exercisesRouter.post("/", async (req, res) => {
   }
 });
 
-/** PUT /api/exercises/:id/hidden — hide an exercise from the user's library and pickers. */
+/**
+ * PUT /api/exercises/:id/hidden — hide an exercise from the user's library and pickers.
+ * For the user's own custom exercises the UI calls this "inactive".
+ */
 exercisesRouter.put("/:id/hidden", async (req, res) => {
   const userId = userIdOf(req);
   const exercise = await ExerciseModel.exists({
@@ -111,5 +114,6 @@ exercisesRouter.delete("/:id", async (req, res) => {
   if (inUse) throw new HttpError(409, "This exercise is used in a workout and can't be deleted");
 
   await exercise.deleteOne();
+  await UserModel.updateOne({ _id: userId }, { $pull: { hiddenExercises: exercise._id } });
   res.status(204).end();
 });

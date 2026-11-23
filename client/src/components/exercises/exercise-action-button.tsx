@@ -14,6 +14,7 @@ export function ExerciseActionButton({
   id,
   label,
   icon,
+  text,
   showLabel = false,
 }: {
   /** A Server Action that reads `id` from the form data. */
@@ -21,10 +22,13 @@ export function ExerciseActionButton({
   id: string;
   /** Accessible name; also shown as text when `showLabel` is set. */
   label: string;
-  icon: ReactNode;
+  icon?: ReactNode;
+  /** Visible button text; `label` stays the accessible name and tooltip. */
+  text?: string;
   showLabel?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
+  const visibleText = text ?? (showLabel ? label : undefined);
 
   return (
     <form action={formAction} className="flex items-center gap-2">
@@ -37,13 +41,13 @@ export function ExerciseActionButton({
       <Button
         type="submit"
         variant="ghost"
-        size={showLabel ? "sm" : "icon-sm"}
+        size={visibleText ? "sm" : "icon-sm"}
         disabled={pending}
-        aria-label={showLabel ? undefined : label}
+        aria-label={visibleText === label ? undefined : label}
         title={label}
       >
         {icon}
-        {showLabel && label}
+        {visibleText}
       </Button>
     </form>
   );
