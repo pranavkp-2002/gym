@@ -61,8 +61,9 @@ curl 'http://localhost:4000/api/stats/dashboard?today=2026-11-23&weeks=8' -H 'Ac
 ```
 
 - On by default in `next dev`, off in production. Override with `API_LOG_CURL=1` or `API_LOG_CURL=0`.
-- The token is printed as `$GYM_TOKEN`, and password fields as `***`. To replay
-  authenticated commands, get a token once:
+- The token is printed as `$GYM_TOKEN`, and password fields as `***`. Set
+  `API_LOG_CURL_TOKEN=1` in `client/.env.local` to print the real token instead
+  (dev only, ignored in production). Otherwise, to replay authenticated commands, get a token once:
 
   ```bash
   export GYM_TOKEN=$(curl -s -X POST http://localhost:4000/api/auth/login \

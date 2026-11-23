@@ -16,6 +16,13 @@ const LOG_CURL =
     ? process.env.API_LOG_CURL === "1"
     : process.env.NODE_ENV === "development";
 
+/**
+ * Print the real session token in logged curl commands instead of $GYM_TOKEN.
+ * Opt-in with API_LOG_CURL_TOKEN=1; ignored in production.
+ */
+const LOG_CURL_TOKEN =
+  process.env.API_LOG_CURL_TOKEN === "1" && process.env.NODE_ENV !== "production";
+
 /** An error response from the API, with a message safe to show the user. */
 export class ApiError extends Error {
   constructor(
@@ -91,7 +98,7 @@ export async function request<T = void>(
   const payload = body === undefined ? undefined : JSON.stringify(body);
   if (payload !== undefined) headers["Content-Type"] = "application/json";
 
-  const curl = LOG_CURL ? toCurl({ method, url, headers, body: payload }) : "";
+  const curl = LOG_CURL ? toCurl({ method, url, headers, body: payload, showToken: LOG_CURL_TOKEN }) : "";
   const started = performance.now();
   const { pathname, search } = new URL(url);
   const label = `${method} ${pathname}${search}`;
