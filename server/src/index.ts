@@ -10,5 +10,5 @@ try {
 }
 
 app.listen(env.port, () => {
-  console.log(`API listening on http://localhost:${env.port}`);
+  console.log(`API listening onnn http://localhost:${env.port}`);
 });
