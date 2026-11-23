@@ -1,11 +1,25 @@
 // Turns an API request into a copy-pasteable curl command for debugging.
+// Secrets never appear in the output:
+//  - the session token becomes "$GYM_TOKEN" (set it once in your shell)
+//  - Cookie / X-Api-Key values become ***
+//  - any JSON body field whose name contains "password" becomes ***
 
-/** Headers whose values are replaced with *** in printed commands. */
-const SECRET_HEADERS = new Set(["authorization", "cookie", "x-api-key"]);
+const SECRET_HEADERS = new Set(["cookie", "x-api-key"]);
+const TOKEN_VAR = "$GYM_TOKEN";
 
 /** Quote for POSIX shells: wrap in '...' and escape embedded single quotes. */
 function shellQuote(value: string) {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function maskBody(body: string) {
+  try {
+    return JSON.stringify(JSON.parse(body), (key, value) =>
+      /password/i.test(key) && typeof value === "string" ? "***" : value
+    );
+  } catch {
+    return body; // not JSON
+  }
 }
 
 export function toCurl({
@@ -23,9 +37,14 @@ export function toCurl({
   if (method !== "GET") parts.push("-X", method);
   parts.push(shellQuote(url));
   for (const [name, value] of Object.entries(headers)) {
-    const shown = SECRET_HEADERS.has(name.toLowerCase()) ? "***" : value;
-    parts.push("-H", shellQuote(`${name}: ${shown}`));
+    const lower = name.toLowerCase();
+    if (lower === "authorization") {
+      // Double quotes so the shell expands $GYM_TOKEN.
+      parts.push("-H", `"Authorization: Bearer ${TOKEN_VAR}"`);
+    } else {
+      parts.push("-H", shellQuote(`${name}: ${SECRET_HEADERS.has(lower) ? "***" : value}`));
+    }
   }
-  if (body !== undefined) parts.push("--data-raw", shellQuote(body));
+  if (body !== undefined) parts.push("--data-raw", shellQuote(maskBody(body)));
   return parts.join(" ");
 }

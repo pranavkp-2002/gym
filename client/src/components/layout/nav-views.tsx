@@ -5,14 +5,12 @@
 import Link from "next/link";
 import { Dumbbell } from "lucide-react";
 import { cn } from "cn";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { NAV_ITEMS, isActive } from "./nav-items";
-
-// Settings is left out of the bottom bar to keep tap targets large.
-const MOBILE_ITEMS = NAV_ITEMS.filter((item) => item.href !== "/settings");
 
 export function SidebarView({ pathname }: { pathname: string | null }) {
   return (
-    <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-border bg-sidebar">
+    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-sidebar md:flex">
       <div className="flex h-16 items-center gap-2 px-6 font-semibold">
         <Dumbbell className="size-5 text-primary" />
         <span>Gym Tracker</span>
@@ -38,14 +36,17 @@ export function SidebarView({ pathname }: { pathname: string | null }) {
           );
         })}
       </nav>
+      <div className="mt-auto px-3 pb-4">
+        <LogoutButton className="w-full" />
+      </div>
     </aside>
   );
 }
 
 export function MobileNavView({ pathname }: { pathname: string | null }) {
   return (
-    <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background/95 backdrop-blur">
-      {MOBILE_ITEMS.map(({ href, label, icon: Icon }) => {
+    <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-border bg-background/95 backdrop-blur">
+      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
         const active = pathname !== null && isActive(pathname, href);
         return (
           <Link

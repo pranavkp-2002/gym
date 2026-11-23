@@ -4,6 +4,9 @@
 import { toDateInput } from "./format";
 import type { WorkoutDetail, WorkoutPayload } from "./types";
 
+/** localStorage key for the unsaved workout. Cleared on logout. */
+export const DRAFT_STORAGE_KEY = "gym:workout-draft";
+
 /** Inputs are strings while typing; they're parsed only on save. */
 export type SetRow = { key: string; reps: string; weight: string };
 export type Entry = {

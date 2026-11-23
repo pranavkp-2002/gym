@@ -1,21 +1,27 @@
 import { Router } from "express";
 import { Types } from "mongoose";
+import { userIdOf } from "../middleware/auth.js";
 import { ExerciseModel } from "../models/Exercise.js";
 import { WorkoutModel } from "../models/Workout.js";
 import { findWorkoutSummaries, volumeOf } from "../services/workout-summary.js";
+import { visibleExercisesFilter } from "../services/visibility.js";
 import { HttpError } from "../utils/http-error.js";
 import { listWorkoutsQuery, previousQuery, workoutInputSchema } from "../validation/workout.js";
 
-// TODO(Step 6 – auth): scope every query to req.user and set `user` on create.
+// Mounted behind requireAuth. Every query is scoped to the signed-in user;
+// another user's workout ids behave exactly like ids that don't exist (404).
 
 export const workoutsRouter = Router();
 
 type SetLike = { reps: number; weight: number };
 
-/** Reject workouts that reference exercises that don't exist. */
-async function assertExercisesExist(ids: string[]) {
+/** Reject workouts that reference exercises the user can't see (or that don't exist). */
+async function assertExercisesExist(userId: Types.ObjectId, ids: string[]) {
   const unique = [...new Set(ids)];
-  const found = await ExerciseModel.countDocuments({ _id: { $in: unique } });
+  const found = await ExerciseModel.countDocuments({
+    _id: { $in: unique },
+    ...visibleExercisesFilter(userId),
+  });
   if (found !== unique.length) throw new HttpError(400, "One or more exercises don't exist");
 }
 
@@ -23,7 +29,7 @@ async function assertExercisesExist(ids: string[]) {
 workoutsRouter.get("/", async (req, res) => {
   const { from, to, page, limit } = listWorkoutsQuery.parse(req.query);
 
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> = { user: userIdOf(req) };
   if (from || to) {
     filter.date = {
       ...(from && { $gte: from }),
@@ -56,6 +62,7 @@ workoutsRouter.get("/previous", async (req, res) => {
   }>([
     {
       $match: {
+        user: userIdOf(req),
         "exercises.exercise": { $in: ids },
         ...(excludeWorkout && { _id: { $ne: new Types.ObjectId(excludeWorkout) } }),
       },
@@ -84,7 +91,7 @@ workoutsRouter.get("/previous", async (req, res) => {
 
 /** GET /api/workouts/:id — full workout with exercise details. */
 workoutsRouter.get("/:id", async (req, res) => {
-  const workout = await WorkoutModel.findById(req.params.id).populate(
+  const workout = await WorkoutModel.findOne({ _id: req.params.id, user: userIdOf(req) }).populate(
     "exercises.exercise",
     "name muscleGroup equipment category"
   );
@@ -95,16 +102,18 @@ workoutsRouter.get("/:id", async (req, res) => {
 /** POST /api/workouts */
 workoutsRouter.post("/", async (req, res) => {
   const data = workoutInputSchema.parse(req.body);
-  await assertExercisesExist(data.exercises.map((e) => e.exercise));
-  const workout = await WorkoutModel.create(data);
+  const userId = userIdOf(req);
+  await assertExercisesExist(userId, data.exercises.map((e) => e.exercise));
+  const workout = await WorkoutModel.create({ ...data, user: userId });
   res.status(201).json(workout);
 });
 
 /** PUT /api/workouts/:id — replace a workout's contents. */
 workoutsRouter.put("/:id", async (req, res) => {
   const data = workoutInputSchema.parse(req.body);
-  await assertExercisesExist(data.exercises.map((e) => e.exercise));
-  const workout = await WorkoutModel.findByIdAndUpdate(req.params.id, data, {
+  const userId = userIdOf(req);
+  await assertExercisesExist(userId, data.exercises.map((e) => e.exercise));
+  const workout = await WorkoutModel.findOneAndUpdate({ _id: req.params.id, user: userId }, data, {
     returnDocument: "after",
     runValidators: true,
   });
@@ -114,7 +123,7 @@ workoutsRouter.put("/:id", async (req, res) => {
 
 /** DELETE /api/workouts/:id */
 workoutsRouter.delete("/:id", async (req, res) => {
-  const workout = await WorkoutModel.findByIdAndDelete(req.params.id);
+  const workout = await WorkoutModel.findOneAndDelete({ _id: req.params.id, user: userIdOf(req) });
   if (!workout) throw new HttpError(404, "Workout not found");
   res.status(204).end();
 });

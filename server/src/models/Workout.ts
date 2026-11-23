@@ -34,8 +34,9 @@ const workoutExerciseSchema = new Schema(
 
 const workoutSchema = new Schema(
   {
-    // Required once authentication is added (Step 6).
-    user: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    // Owner. Workouts saved before accounts existed are claimed by the first
+    // account on registration (see routes/auth.ts).
+    user: { type: Schema.Types.ObjectId, ref: "User", required: true },
     name: { type: String, required: true, trim: true, maxlength: 100 },
     date: { type: Date, required: true, default: Date.now },
     notes: { type: String, trim: true, maxlength: 2000, default: "" },

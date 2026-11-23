@@ -1,4 +1,6 @@
 import "server-only";
+import { redirect } from "next/navigation";
+import { getSessionToken } from "../session";
 import { toCurl } from "./curl";
 
 // Server-side only: pages and Server Actions call the Express API directly,
@@ -24,7 +26,7 @@ export class ApiError extends Error {
   }
 }
 
-type Method = "GET" | "POST" | "PUT" | "DELETE";
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type QueryValue = string | number | undefined | null;
 
 export type RequestOptions = {
@@ -33,7 +35,15 @@ export type RequestOptions = {
   /** Serialized as JSON. */
   body?: unknown;
   headers?: Record<string, string>;
+  /**
+   * Send the signed-in user's token (default). On 401 the user is sent to
+   * sign in again. Set false for login/register, where 401 means bad input.
+   */
+  auth?: boolean;
 };
+
+/** Route Handler that clears an invalid session cookie, then goes to /login. */
+export const SESSION_EXPIRED_PATH = "/session-expired";
 
 /** Encode one path segment, e.g. an id from the URL. */
 export const seg = (value: string) => encodeURIComponent(value);
@@ -70,10 +80,14 @@ function isPrerenderCancel(err: unknown) {
 export async function request<T = void>(
   method: Method,
   path: string,
-  { query, body, headers: extra }: RequestOptions = {}
+  { query, body, headers: extra, auth = true }: RequestOptions = {}
 ): Promise<T> {
   const url = buildUrl(path, query);
   const headers: Record<string, string> = { Accept: "application/json", ...extra };
+  if (auth) {
+    const token = await getSessionToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
   const payload = body === undefined ? undefined : JSON.stringify(body);
   if (payload !== undefined) headers["Content-Type"] = "application/json";
 
@@ -94,6 +108,10 @@ export async function request<T = void>(
     throw err;
   }
   logCall(curl, `${label} → ${res.status} (${Math.round(performance.now() - started)}ms)`);
+
+  // Missing, expired or revoked session. redirect() works in Server Components
+  // and Server Actions; the route clears the cookie so /login doesn't bounce back.
+  if (res.status === 401 && auth) redirect(SESSION_EXPIRED_PATH);
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

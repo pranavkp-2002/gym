@@ -4,7 +4,7 @@ import { ChevronLeft, Pencil } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { ConfirmDeleteButton } from "@/components/form/confirm-delete-button";
 import { ListSkeleton } from "@/components/workouts/skeletons";
-import { deleteWorkout } from "@/app/workouts/actions";
+import { deleteWorkout } from "@/lib/actions/workouts";
 import { formatKg, formatWorkoutDate, humanize } from "@/lib/format";
 import { loadWorkoutOr404 } from "@/lib/load-workout";
 

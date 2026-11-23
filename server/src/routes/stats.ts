@@ -1,9 +1,15 @@
 import { Router } from "express";
+import { userIdOf } from "../middleware/auth.js";
+import { ExerciseModel } from "../models/Exercise.js";
 import { WorkoutModel } from "../models/Workout.js";
+import { exerciseSessions, personalRecords } from "../services/progress.js";
+import { HttpError } from "../utils/http-error.js";
+import { visibleExercisesFilter } from "../services/visibility.js";
 import { findWorkoutSummaries, volumeExpr } from "../services/workout-summary.js";
-import { dashboardQuery } from "../validation/stats.js";
+import { dashboardQuery, exerciseProgressQuery } from "../validation/stats.js";
+import { objectId } from "../validation/workout.js";
 
-// TODO(Step 6 – auth): scope to req.user.
+// Mounted behind requireAuth. Every aggregation starts by matching the user.
 
 export const statsRouter = Router();
 
@@ -24,6 +30,7 @@ function mondayOf(d: Date) {
  */
 statsRouter.get("/dashboard", async (req, res) => {
   const parsed = dashboardQuery.parse(req.query);
+  const userId = userIdOf(req);
   const today = parsed.today ?? new Date(`${isoDay(new Date())}T00:00:00.000Z`);
   const { weeks } = parsed;
 
@@ -36,6 +43,7 @@ statsRouter.get("/dashboard", async (req, res) => {
     weekly: { _id: number; workouts: number; volume: number }[];
     thisWeekDays: { _id: Date }[];
   }>([
+    { $match: { user: userId } },
     { $project: { date: 1, volume: volumeExpr } },
     {
       $facet: {
@@ -71,7 +79,7 @@ statsRouter.get("/dashboard", async (req, res) => {
   }));
   const thisWeek = weekly[weekly.length - 1];
 
-  const recent = await findWorkoutSummaries({}, { limit: 5 });
+  const recent = await findWorkoutSummaries({ user: userId }, { limit: 5 });
 
   res.json({
     today: isoDay(today),
@@ -87,4 +95,114 @@ statsRouter.get("/dashboard", async (req, res) => {
     weekly,
     recent,
   });
+});
+
+/**
+ * GET /api/stats/exercises/:id?from=YYYY-MM-DD
+ * One exercise's progress: per-session metrics (oldest first, optionally from a
+ * date), all-time personal records, and which sessions set a new heaviest weight.
+ * `before` is the session just before the range, so the first one shown can
+ * still be compared with its predecessor.
+ */
+statsRouter.get("/exercises/:id", async (req, res) => {
+  const id = objectId.parse(req.params.id);
+  const { from } = exerciseProgressQuery.parse(req.query);
+
+  const userId = userIdOf(req);
+  const exercise = await ExerciseModel.findOne({ _id: id, ...visibleExercisesFilter(userId) });
+  if (!exercise) throw new HttpError(404, "Exercise not found");
+
+  const all = await exerciseSessions(userId, id);
+
+  // Mark sessions that beat every earlier session's top weight.
+  let running = 0;
+  const marked = all.map((s) => {
+    const isWeightPR = s.topWeight > running;
+    running = Math.max(running, s.topWeight);
+    return { ...s, isWeightPR };
+  });
+
+  const firstInRange = from ? marked.findIndex((s) => s.date >= from) : 0;
+  const inRange = firstInRange === -1 ? [] : marked.slice(firstInRange);
+
+  res.json({
+    exercise,
+    records: personalRecords(all),
+    totalSessions: all.length,
+    sessions: inRange,
+    before: firstInRange > 0 ? marked[firstInRange - 1] : null,
+  });
+});
+
+/**
+ * GET /api/stats/records
+ * Personal records for every exercise that has been logged, most recent first.
+ */
+statsRouter.get("/records", async (req, res) => {
+  const rows = await WorkoutModel.aggregate<{
+    _id: unknown;
+    name: string;
+    muscleGroup: string;
+    heaviest: { weight: number; reps: number; date: Date };
+    best1RM: number;
+    sessions: number;
+    lastDate: Date;
+  }>([
+    { $match: { user: userIdOf(req) } },
+    { $unwind: "$exercises" },
+    { $unwind: "$exercises.sets" },
+    {
+      $project: {
+        workout: "$_id",
+        date: 1,
+        exercise: "$exercises.exercise",
+        reps: "$exercises.sets.reps",
+        weight: "$exercises.sets.weight",
+        // Same Epley formula as services/progress.ts estimate1RM().
+        e1rm: {
+          $switch: {
+            branches: [
+              { case: { $or: [{ $lte: ["$exercises.sets.reps", 0] }, { $lte: ["$exercises.sets.weight", 0] }] }, then: 0 },
+              { case: { $eq: ["$exercises.sets.reps", 1] }, then: "$exercises.sets.weight" },
+            ],
+            default: {
+              $round: [
+                { $multiply: ["$exercises.sets.weight", { $add: [1, { $divide: ["$exercises.sets.reps", 30] }] }] },
+                1,
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      $group: {
+        _id: "$exercise",
+        heaviest: {
+          $top: {
+            sortBy: { weight: -1, reps: -1, date: 1 },
+            output: { weight: "$weight", reps: "$reps", date: "$date" },
+          },
+        },
+        best1RM: { $max: "$e1rm" },
+        workouts: { $addToSet: "$workout" },
+        lastDate: { $max: "$date" },
+      },
+    },
+    { $lookup: { from: "exercises", localField: "_id", foreignField: "_id", as: "ex" } },
+    { $unwind: "$ex" }, // drops records for exercises that were deleted
+    {
+      $project: {
+        name: "$ex.name",
+        muscleGroup: "$ex.muscleGroup",
+        heaviest: 1,
+        best1RM: 1,
+        sessions: { $size: "$workouts" },
+        lastDate: 1,
+      },
+    },
+    { $sort: { lastDate: -1, name: 1 } },
+  ]);
+
+  res.json(rows.map(({ _id, ...r }) => ({ exerciseId: String(_id), ...r })));
 });

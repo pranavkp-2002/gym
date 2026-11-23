@@ -78,3 +78,42 @@ export type DashboardStats = {
   weekly: WeekStat[]; // oldest -> newest, current week last
   recent: WorkoutSummary[];
 };
+
+export type ProgressSession = {
+  workoutId: string;
+  workoutName: string;
+  date: string;
+  sets: WorkoutSet[];
+  topWeight: number;
+  topWeightReps: number;
+  best1RM: number;
+  volume: number;
+  totalReps: number;
+  isWeightPR: boolean;
+};
+
+export type PersonalRecord = { value: number; date: string; workoutId: string };
+
+export type ExerciseProgress = {
+  exercise: Exercise;
+  records: {
+    heaviestWeight: (PersonalRecord & { reps: number }) | null;
+    best1RM: PersonalRecord | null;
+    bestVolume: PersonalRecord | null;
+    mostReps: PersonalRecord | null;
+  };
+  totalSessions: number;
+  sessions: ProgressSession[]; // oldest first
+  /** The session just before `sessions` (outside the range), if any. */
+  before: ProgressSession | null;
+};
+
+export type RecordRow = {
+  exerciseId: string;
+  name: string;
+  muscleGroup: string;
+  heaviest: { weight: number; reps: number; date: string };
+  best1RM: number;
+  sessions: number;
+  lastDate: string;
+};

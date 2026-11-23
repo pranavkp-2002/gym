@@ -4,8 +4,6 @@ import { redirect } from "next/navigation";
 import { ApiError, workoutsApi } from "@/lib/api";
 import type { PreviousPerformance, WorkoutPayload } from "@/lib/types";
 
-// TODO(Step 6 – auth): verify the session in every action.
-
 /**
  * Create (no id) or update (id) a workout. Returns the saved id instead of
  * redirecting, so the client can clear its local draft before navigating.

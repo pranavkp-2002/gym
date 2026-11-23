@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { Types } from "mongoose";
 
-const objectId = z.string().refine((v) => Types.ObjectId.isValid(v), "Invalid id");
+export const objectId = z.string().refine((v) => Types.ObjectId.isValid(v), "Invalid id");
 
 /**
  * Workout dates are calendar days ("2026-11-23"), stored as midnight UTC.

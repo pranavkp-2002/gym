@@ -6,3 +6,8 @@ export const dashboardQuery = z.object({
   today: calendarDate.optional(),
   weeks: z.coerce.number().int().min(1).max(26).default(8),
 });
+
+export const exerciseProgressQuery = z.object({
+  /** Only return sessions on or after this day. Records are always all-time. */
+  from: calendarDate.optional(),
+});

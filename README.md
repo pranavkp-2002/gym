@@ -22,6 +22,20 @@ Browser ──▶ Next.js (server components + server actions) ──▶ Express
 - **Express is the single source of validation** (Zod) and of the exercise
   classification values (`GET /api/exercises/options`).
 
+## Authentication
+
+- Passwords are hashed with bcrypt. Express issues a JWT (HS256, `JWT_EXPIRES_IN`, default 7d).
+- Next stores it in an **httpOnly** `session` cookie (never readable by browser JS) and
+  sends it to Express as `Authorization: Bearer …` on every request.
+- Express `requireAuth` protects everything except `/api/health` and `/api/auth/*`, and
+  **every query is scoped to the signed-in user**. Another user's ids return 404.
+- Users see all predefined exercises plus only their own custom exercises.
+- `client/src/proxy.ts` redirects signed-out visitors to `/login` (and back to the page
+  they wanted after signing in). An expired or invalid session goes through
+  `/session-expired`, which clears the cookie.
+- **The first account to register takes ownership of data created before accounts
+  existed** (workouts and custom exercises with no owner).
+
 ## API client (client/src/lib/api/)
 
 All calls to Express go through one place:
@@ -46,7 +60,14 @@ curl 'http://localhost:4000/api/stats/dashboard?today=2026-11-23&weeks=8' -H 'Ac
 ```
 
 - On by default in `next dev`, off in production. Override with `API_LOG_CURL=1` or `API_LOG_CURL=0`.
-- `Authorization`, `Cookie` and `X-Api-Key` values are printed as `***`.
+- The token is printed as `$GYM_TOKEN`, and password fields as `***`. To replay
+  authenticated commands, get a token once:
+
+  ```bash
+  export GYM_TOKEN=$(curl -s -X POST http://localhost:4000/api/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"you@example.com","password":"your-password"}' | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
+  ```
 - Lines marked `cancelled (Next.js prerender finished)` are expected: Next prerenders
   pages speculatively and cancels fetches it no longer needs.
 
@@ -61,7 +82,7 @@ curl 'http://localhost:4000/api/stats/dashboard?today=2026-11-23&weeks=8' -H 'Ac
 ```bash
 # 1. API (http://localhost:4000)
 cd server
-cp .env.example .env      # set MONGODB_URI
+cp .env.example .env      # set MONGODB_URI and JWT_SECRET (32+ random chars)
 npm install
 npm run seed              # load the predefined exercise library (safe to re-run)
 npm run dev
@@ -77,9 +98,17 @@ Check the API: `curl http://localhost:4000/api/health` → `{"status":"ok","db":
 
 ## API
 
+All endpoints except `/api/health` and `/api/auth/register|login` need
+`Authorization: Bearer <token>`.
+
 | Method | Path                       | Description                                   |
 |--------|----------------------------|-----------------------------------------------|
-| GET    | `/api/health`              | Server + database status                      |
+| GET    | `/api/health`              | Server + database status (public)             |
+| POST   | `/api/auth/register`       | `{ name, email, password }` → `{ user, token }` (public) |
+| POST   | `/api/auth/login`          | `{ email, password }` → `{ user, token }` (public) |
+| GET    | `/api/auth/me`             | The signed-in user                            |
+| PATCH  | `/api/auth/me`             | Update `{ name?, email? }`                    |
+| POST   | `/api/auth/password`       | `{ currentPassword, newPassword }`            |
 | GET    | `/api/exercises`           | List; filters: `q`, `muscleGroup`, `equipment`, `category` |
 | GET    | `/api/exercises/options`   | Allowed muscle groups / equipment / categories |
 | GET    | `/api/exercises/:id`       | One exercise                                  |
@@ -92,6 +121,10 @@ Check the API: `curl http://localhost:4000/api/health` → `{"status":"ok","db":
 | PUT    | `/api/workouts/:id`        | Replace a workout                             |
 | DELETE | `/api/workouts/:id`        | Delete a workout                              |
 | GET    | `/api/stats/dashboard`     | Totals, this/last week, weekly series, recent; `today` (YYYY-MM-DD), `weeks` (1–26) |
+| GET    | `/api/stats/exercises/:id` | One exercise's sessions (oldest first), all-time PRs, `before` session; optional `from` (YYYY-MM-DD) |
+| GET    | `/api/stats/records`       | Personal records for every logged exercise |
+
+Estimated 1RM uses the Epley formula, `weight × (1 + reps / 30)` (a single rep is the weight itself).
 
 Workout `date` is a calendar day (`YYYY-MM-DD`), stored as midnight UTC and always
 displayed in UTC, so the day never shifts across timezones. Weeks start on Monday.

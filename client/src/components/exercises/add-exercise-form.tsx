@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/form/native-select";
-import { createExercise, type CreateExerciseState } from "@/app/exercises/actions";
+import { createExercise, type CreateExerciseState } from "@/lib/actions/exercises";
 import { humanize } from "@/lib/format";
 import type { ExerciseOptions } from "@/lib/types";
 

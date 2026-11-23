@@ -12,11 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/form/native-select";
-import { getPreviousPerformance, saveWorkout } from "@/app/workouts/actions";
+import { getPreviousPerformance, saveWorkout } from "@/lib/actions/workouts";
 import { formatKg, formatSets, formatWorkoutDate, humanize } from "@/lib/format";
 import type { Exercise, PreviousPerformance } from "@/lib/types";
 import {
   buildPayload,
+  DRAFT_STORAGE_KEY as DRAFT_KEY,
   draftVolume,
   emptyDraft,
   emptySet,
@@ -28,7 +29,6 @@ import {
   type WorkoutDraft,
 } from "@/lib/workout-draft";
 
-const DRAFT_KEY = "gym:workout-draft";
 
 function localToday() {
   const d = new Date();

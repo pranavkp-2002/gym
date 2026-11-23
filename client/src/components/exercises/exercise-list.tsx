@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { humanize } from "@/lib/format";
 import type { Exercise } from "@/lib/types";
 import { ConfirmDeleteButton } from "@/components/form/confirm-delete-button";
-import { deleteExercise } from "@/app/exercises/actions";
+import { deleteExercise } from "@/lib/actions/exercises";
 
 /** Server Component: pure rendering, no client JS except the delete buttons. */
 export function ExerciseList({ exercises }: { exercises: Exercise[] }) {

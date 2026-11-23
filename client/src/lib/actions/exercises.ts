@@ -3,9 +3,6 @@
 import { refresh } from "next/cache";
 import { ApiError, exercisesApi } from "@/lib/api";
 
-// TODO(Step 6 – auth): verify the session in every action. Server Actions are
-// reachable by direct POST, not just through the UI.
-
 export type CreateExerciseState = {
   error?: string;
   success?: string;
