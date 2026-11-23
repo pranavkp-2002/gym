@@ -1,7 +1,9 @@
 import { Router } from "express";
+import { Types } from "mongoose";
 import { userIdOf } from "../middleware/auth.js";
 import { CATEGORIES, EQUIPMENT, MUSCLE_GROUPS } from "../models/constants.js";
 import { ExerciseModel } from "../models/Exercise.js";
+import { UserModel } from "../models/User.js";
 import { WorkoutModel } from "../models/Workout.js";
 import { visibleExercisesFilter } from "../services/visibility.js";
 import { HttpError } from "../utils/http-error.js";
@@ -19,15 +21,26 @@ exercisesRouter.get("/options", (_req, res) => {
   res.json({ muscleGroups: MUSCLE_GROUPS, equipment: EQUIPMENT, categories: CATEGORIES });
 });
 
-/** GET /api/exercises?q=&muscleGroup=&equipment=&category= */
-exercisesRouter.get("/", async (req, res) => {
-  const { q, ...filters } = listExercisesQuery.parse(req.query);
+/** The ids of exercises the user has hidden. */
+async function hiddenIdsOf(userId: Types.ObjectId): Promise<Types.ObjectId[]> {
+  const user = await UserModel.findById(userId).select("hiddenExercises").lean();
+  return user?.hiddenExercises ?? [];
+}
 
-  const query: Record<string, unknown> = { ...filters, ...visibleExercisesFilter(userIdOf(req)) };
+/** GET /api/exercises?q=&muscleGroup=&equipment=&category=&hidden=exclude|include|only */
+exercisesRouter.get("/", async (req, res) => {
+  const { q, hidden, ...filters } = listExercisesQuery.parse(req.query);
+  const userId = userIdOf(req);
+  const hiddenIds = await hiddenIdsOf(userId);
+
+  const query: Record<string, unknown> = { ...filters, ...visibleExercisesFilter(userId) };
   if (q) query.name = { $regex: escapeRegex(q), $options: "i" };
+  if (hidden === "exclude") query._id = { $nin: hiddenIds };
+  if (hidden === "only") query._id = { $in: hiddenIds };
 
   const exercises = await ExerciseModel.find(query).collation(caseInsensitive).sort({ name: 1 });
-  res.json(exercises);
+  const hiddenSet = new Set(hiddenIds.map(String));
+  res.json(exercises.map((e) => ({ ...e.toJSON(), hidden: hiddenSet.has(String(e._id)) })));
 });
 
 /** GET /api/exercises/:id */
@@ -59,6 +72,29 @@ exercisesRouter.post("/", async (req, res) => {
     if ((err as { code?: number }).code === 11000) throw taken();
     throw err;
   }
+});
+
+/** PUT /api/exercises/:id/hidden — hide an exercise from the user's library and pickers. */
+exercisesRouter.put("/:id/hidden", async (req, res) => {
+  const userId = userIdOf(req);
+  const exercise = await ExerciseModel.exists({
+    _id: req.params.id,
+    ...visibleExercisesFilter(userId),
+  });
+  if (!exercise) throw new HttpError(404, "Exercise not found");
+
+  await UserModel.updateOne({ _id: userId }, { $addToSet: { hiddenExercises: exercise._id } });
+  res.status(204).end();
+});
+
+/** DELETE /api/exercises/:id/hidden — show a hidden exercise again. */
+exercisesRouter.delete("/:id/hidden", async (req, res) => {
+  if (!Types.ObjectId.isValid(req.params.id)) throw new HttpError(404, "Exercise not found");
+  await UserModel.updateOne(
+    { _id: userIdOf(req) },
+    { $pull: { hiddenExercises: new Types.ObjectId(req.params.id) } }
+  );
+  res.status(204).end();
 });
 
 /** DELETE /api/exercises/:id — the user's own custom exercises, and only if unused. */

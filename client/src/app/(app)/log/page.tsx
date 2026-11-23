@@ -7,7 +7,9 @@ import { exercisesApi } from "@/lib/api";
 // Server Component: loads the exercise list on the server and hands it to the
 // client-side logger, so the picker is ready immediately.
 async function LogWorkout() {
-  const exercises = await exercisesApi.list();
+  // Include hidden ones so a restored draft still shows their names;
+  // the form leaves them out of its picker.
+  const exercises = await exercisesApi.list({}, "include");
   return <WorkoutForm exercises={exercises} />;
 }
 

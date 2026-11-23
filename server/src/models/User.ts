@@ -7,6 +7,9 @@ const userSchema = new Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     // bcrypt hash. Not loaded by queries unless selected with "+passwordHash".
     passwordHash: { type: String, select: false },
+    // Predefined exercises this user has hidden from their library and pickers.
+    // Workouts that already use them are unaffected.
+    hiddenExercises: { type: [Schema.Types.ObjectId], ref: "Exercise", default: [] },
   },
   {
     timestamps: true,
@@ -17,6 +20,7 @@ const userSchema = new Schema(
       transform: (doc: unknown, ret: Record<string, unknown>) => {
         toJSONOptions.transform(doc, ret);
         delete ret.passwordHash;
+        delete ret.hiddenExercises;
         return ret;
       },
     },

@@ -2,9 +2,11 @@ import { Badge } from "@/components/ui/badge";
 import { humanize } from "@/lib/format";
 import type { Exercise } from "@/lib/types";
 import { ConfirmDeleteButton } from "@/components/form/confirm-delete-button";
-import { deleteExercise } from "@/lib/actions/exercises";
+import { EyeOff } from "lucide-react";
+import { deleteExercise, hideExercise } from "@/lib/actions/exercises";
+import { ExerciseActionButton } from "./exercise-action-button";
 
-/** Server Component: pure rendering, no client JS except the delete buttons. */
+/** Server Component: pure rendering, no client JS except the delete/hide buttons. */
 export function ExerciseList({ exercises }: { exercises: Exercise[] }) {
   if (exercises.length === 0) {
     return (
@@ -36,12 +38,19 @@ export function ExerciseList({ exercises }: { exercises: Exercise[] }) {
                 {humanize(exercise.category)}
               </p>
             </div>
-            {exercise.isCustom && (
+            {exercise.isCustom ? (
               <ConfirmDeleteButton
                 action={deleteExercise}
                 id={exercise.id}
                 confirmMessage={`Delete "${exercise.name}"?`}
                 label={`Delete ${exercise.name}`}
+              />
+            ) : (
+              <ExerciseActionButton
+                action={hideExercise}
+                id={exercise.id}
+                label={`Hide ${exercise.name}`}
+                icon={<EyeOff />}
               />
             )}
           </li>

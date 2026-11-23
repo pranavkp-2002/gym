@@ -41,6 +41,7 @@ export function WorkoutForm({
   workoutId,
   initial,
 }: {
+  /** May include hidden exercises: they resolve names but aren't offered in the picker. */
   exercises: Exercise[];
   /** Set when editing an existing workout. */
   workoutId?: string;
@@ -54,15 +55,20 @@ export function WorkoutForm({
   const [restored, setRestored] = useState(false);
   const [loaded, setLoaded] = useState(isEdit);
   const [saving, startSaving] = useTransition();
+  /** Muscle group the "Add exercise" picker is narrowed to; "" = all. */
+  const [muscleFilter, setMuscleFilter] = useState("");
   const requested = useRef(new Set<string>());
   const initialized = useRef(false);
+  /** What this form last wrote to localStorage, to spot changes made elsewhere. */
+  const lastStored = useRef<string | null>(null);
 
   const byId = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
   const grouped = useMemo(() => {
     const groups = new Map<string, Exercise[]>();
-    for (const e of exercises) groups.set(e.muscleGroup, [...(groups.get(e.muscleGroup) ?? []), e]);
+    for (const e of exercises.filter((e) => !e.hidden)) groups.set(e.muscleGroup, [...(groups.get(e.muscleGroup) ?? []), e]);
     return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [exercises]);
+  const shownGroups = muscleFilter ? grouped.filter(([group]) => group === muscleFilter) : grouped;
   const nameOf = (id: string) => byId.get(id)?.name ?? "Exercise";
 
   // New workouts: restore an unsaved draft (localStorage) and default the date
@@ -74,7 +80,8 @@ export function WorkoutForm({
     initialized.current = true;
     let saved: WorkoutDraft | null = null;
     try {
-      saved = parseStoredDraft(localStorage.getItem(DRAFT_KEY));
+      lastStored.current = localStorage.getItem(DRAFT_KEY);
+      saved = parseStoredDraft(lastStored.current);
     } catch {}
     if (saved && !isDraftEmpty(saved)) {
       setDraft(saved);
@@ -86,11 +93,25 @@ export function WorkoutForm({
   }, [isEdit]);
 
   // Keep the draft in localStorage so a refresh or closed tab loses nothing.
+  // This also re-runs when the page is shown again; if the draft was saved or
+  // deleted from the Workouts list meanwhile, adopt that instead of overwriting it.
   useEffect(() => {
     if (isEdit || !loaded) return;
     try {
-      if (isDraftEmpty(draft)) localStorage.removeItem(DRAFT_KEY);
-      else localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      const current = localStorage.getItem(DRAFT_KEY);
+      if (current !== lastStored.current) {
+        lastStored.current = current;
+        // Syncing from an external system (localStorage) on re-show; there is
+        // no event to subscribe to while this page was hidden.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setDraft(parseStoredDraft(current) ?? emptyDraft(localToday()));
+        setRestored(false);
+        return;
+      }
+      const next = isDraftEmpty(draft) ? null : JSON.stringify(draft);
+      if (next === null) localStorage.removeItem(DRAFT_KEY);
+      else localStorage.setItem(DRAFT_KEY, next);
+      lastStored.current = next;
     } catch {}
   }, [draft, isEdit, loaded]);
 
@@ -319,25 +340,45 @@ export function WorkoutForm({
         );
       })}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="add-exercise">Add exercise</Label>
-        <NativeSelect
-          id="add-exercise"
-          value=""
-          onChange={(e) => addExercise(e.target.value)}
-          className="h-10"
-        >
-          <option value="">{draft.entries.length ? "Add another exercise…" : "Choose an exercise…"}</option>
-          {grouped.map(([group, items]) => (
-            <optgroup key={group} label={humanize(group)}>
-              {items.map((ex) => (
-                <option key={ex.id} value={ex.id} disabled={inWorkout.has(ex.id)}>
-                  {ex.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </NativeSelect>
+      <div className="grid gap-4 sm:grid-cols-[12rem_1fr]">
+        <div className="space-y-1.5">
+          <Label htmlFor="muscle-filter">Muscle group</Label>
+          <NativeSelect
+            id="muscle-filter"
+            value={muscleFilter}
+            onChange={(e) => setMuscleFilter(e.target.value)}
+            className="h-10"
+          >
+            <option value="">All muscle groups</option>
+            {grouped.map(([group]) => (
+              <option key={group} value={group}>
+                {humanize(group)}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="add-exercise">Add exercise</Label>
+          <NativeSelect
+            id="add-exercise"
+            value=""
+            onChange={(e) => addExercise(e.target.value)}
+            className="h-10"
+          >
+            <option value="">
+              {draft.entries.length ? "Add another exercise…" : "Choose an exercise…"}
+            </option>
+            {shownGroups.map(([group, items]) => (
+              <optgroup key={group} label={humanize(group)}>
+                {items.map((ex) => (
+                  <option key={ex.id} value={ex.id} disabled={inWorkout.has(ex.id)}>
+                    {ex.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </NativeSelect>
+        </div>
       </div>
 
       <div className="space-y-1.5">

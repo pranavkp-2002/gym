@@ -28,8 +28,13 @@ export async function ProgressView({ searchParams }: { searchParams: Promise<Sea
   const range = parseRange(params.range);
   const exerciseId = typeof params.exercise === "string" ? params.exercise : undefined;
 
-  const [exercises, records] = await Promise.all([exercisesApi.list(), statsApi.records()]);
+  const [allExercises, records] = await Promise.all([
+    exercisesApi.list({}, "include"),
+    statsApi.records(),
+  ]);
   const loggedIds = new Set(records.map((r) => r.exerciseId));
+  // Hidden exercises stay pickable only if they have history to show.
+  const exercises = allExercises.filter((e) => !e.hidden || loggedIds.has(e.id));
   const known = exerciseId && exercises.some((e) => e.id === exerciseId) ? exerciseId : undefined;
 
   const picker = (

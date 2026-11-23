@@ -11,7 +11,7 @@ import { draftFromWorkout } from "@/lib/workout-draft";
 
 async function EditWorkout({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [workout, exercises] = await Promise.all([loadWorkoutOr404(id), exercisesApi.list()]);
+  const [workout, exercises] = await Promise.all([loadWorkoutOr404(id), exercisesApi.list({}, "include")]);
   return (
     <>
       <Link href={`/workouts/${id}`} className={buttonVariants({ variant: "ghost", size: "sm", className: "mb-4 -ml-2" })}>

@@ -44,8 +44,9 @@ export type ExerciseInput = {
 };
 
 export const exercisesApi = {
-  list: (filters: ExerciseFilters = {}) =>
-    request<Exercise[]>("GET", "/api/exercises", { query: filters }),
+  /** Hidden exercises are left out unless `hidden` is "include" or "only". */
+  list: (filters: ExerciseFilters = {}, hidden?: "include" | "only") =>
+    request<Exercise[]>("GET", "/api/exercises", { query: { ...filters, hidden } }),
 
   options: () => request<ExerciseOptions>("GET", "/api/exercises/options"),
 
@@ -54,6 +55,10 @@ export const exercisesApi = {
   create: (input: ExerciseInput) => request<Exercise>("POST", "/api/exercises", { body: input }),
 
   remove: (id: string) => request("DELETE", `/api/exercises/${seg(id)}`),
+
+  hide: (id: string) => request("PUT", `/api/exercises/${seg(id)}/hidden`),
+
+  unhide: (id: string) => request("DELETE", `/api/exercises/${seg(id)}/hidden`),
 };
 
 export const workoutsApi = {

@@ -29,7 +29,8 @@ Browser ──▶ Next.js (server components + server actions) ──▶ Express
   sends it to Express as `Authorization: Bearer …` on every request.
 - Express `requireAuth` protects everything except `/api/health` and `/api/auth/*`, and
   **every query is scoped to the signed-in user**. Another user's ids return 404.
-- Users see all predefined exercises plus only their own custom exercises.
+- Users see all predefined exercises plus only their own custom exercises. Each user can
+  hide predefined exercises they don't use (and restore them) from the Exercise Library.
 - `client/src/proxy.ts` redirects signed-out visitors to `/login` (and back to the page
   they wanted after signing in). An expired or invalid session goes through
   `/session-expired`, which clears the cookie.
@@ -109,11 +110,13 @@ All endpoints except `/api/health` and `/api/auth/register|login` need
 | GET    | `/api/auth/me`             | The signed-in user                            |
 | PATCH  | `/api/auth/me`             | Update `{ name?, email? }`                    |
 | POST   | `/api/auth/password`       | `{ currentPassword, newPassword }`            |
-| GET    | `/api/exercises`           | List; filters: `q`, `muscleGroup`, `equipment`, `category` |
+| GET    | `/api/exercises`           | List; filters: `q`, `muscleGroup`, `equipment`, `category`, `hidden` (`exclude` default, `include`, `only`) |
 | GET    | `/api/exercises/options`   | Allowed muscle groups / equipment / categories |
 | GET    | `/api/exercises/:id`       | One exercise                                  |
 | POST   | `/api/exercises`           | Add a custom exercise                         |
 | DELETE | `/api/exercises/:id`       | Delete a custom exercise (blocked if used in a workout) |
+| PUT    | `/api/exercises/:id/hidden` | Hide an exercise from your library and pickers |
+| DELETE | `/api/exercises/:id/hidden` | Show a hidden exercise again                 |
 | GET    | `/api/workouts`            | History, newest first; `from`, `to` (YYYY-MM-DD), `page`, `limit` |
 | GET    | `/api/workouts/previous`   | Last sets per exercise: `exercises=id1,id2`, optional `excludeWorkout` |
 | GET    | `/api/workouts/:id`        | One workout with exercise details and volume  |

@@ -3,6 +3,7 @@ import type { ExerciseFilters, ExerciseOptions } from "@/lib/types";
 import { ExerciseFiltersBar } from "./exercise-filters";
 import { ExerciseList } from "./exercise-list";
 import { AddExerciseForm } from "./add-exercise-form";
+import { HiddenExercises } from "./hidden-exercises";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -31,13 +32,17 @@ export async function ExerciseLibrary({
 }) {
   const [params, options] = await Promise.all([searchParams, exercisesApi.options()]);
   const filters = parseFilters(params, options);
-  const exercises = await exercisesApi.list(filters);
+  const [exercises, hidden] = await Promise.all([
+    exercisesApi.list(filters),
+    exercisesApi.list({}, "only"),
+  ]);
 
   return (
     <div className="space-y-6">
       <AddExerciseForm options={options} />
       <ExerciseFiltersBar filters={filters} options={options} />
       <ExerciseList exercises={exercises} />
+      <HiddenExercises exercises={hidden} />
     </div>
   );
 }

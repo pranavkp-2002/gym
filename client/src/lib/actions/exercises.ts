@@ -35,21 +35,29 @@ export async function createExercise(
   return { success: `Added "${values.name.trim()}"` };
 }
 
-export type DeleteExerciseState = { error?: string };
+export type ExerciseActionState = { error?: string };
 
-export async function deleteExercise(
-  _prev: DeleteExerciseState,
-  formData: FormData
-): Promise<DeleteExerciseState> {
+/** Run an API call on the exercise whose id is in the form, then refresh the page. */
+async function runOnExercise(formData: FormData, call: (id: string) => Promise<unknown>) {
   const id = String(formData.get("id") ?? "");
-
   try {
-    await exercisesApi.remove(id);
+    await call(id);
   } catch (err) {
     if (err instanceof ApiError) return { error: err.message };
     throw err;
   }
-
   refresh();
   return {};
+}
+
+export async function deleteExercise(_prev: ExerciseActionState, formData: FormData) {
+  return runOnExercise(formData, exercisesApi.remove);
+}
+
+export async function hideExercise(_prev: ExerciseActionState, formData: FormData) {
+  return runOnExercise(formData, exercisesApi.hide);
+}
+
+export async function unhideExercise(_prev: ExerciseActionState, formData: FormData) {
+  return runOnExercise(formData, exercisesApi.unhide);
 }

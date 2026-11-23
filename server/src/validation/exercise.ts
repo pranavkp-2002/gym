@@ -13,4 +13,6 @@ export const listExercisesQuery = z.object({
   muscleGroup: z.enum(MUSCLE_GROUPS).optional(),
   equipment: z.enum(EQUIPMENT).optional(),
   category: z.enum(CATEGORIES).optional(),
+  // exclude (default): leave out exercises the user hid; include: all; only: just the hidden ones.
+  hidden: z.enum(["exclude", "include", "only"]).default("exclude"),
 });

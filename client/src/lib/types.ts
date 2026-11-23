@@ -7,6 +7,8 @@ export type Exercise = {
   equipment: string;
   category: string;
   isCustom: boolean;
+  /** The signed-in user has hidden this exercise from their library and pickers. */
+  hidden: boolean;
   createdAt: string;
 };
 
