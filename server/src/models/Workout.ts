@@ -40,6 +40,9 @@ const workoutSchema = new Schema(
     name: { type: String, required: true, trim: true, maxlength: 100 },
     date: { type: Date, required: true, default: Date.now },
     notes: { type: String, trim: true, maxlength: 2000, default: "" },
+    // The routine this workout was started from, if any. Cleared when the
+    // routine is deleted; the workout itself is kept.
+    routine: { type: Schema.Types.ObjectId, ref: "Routine", default: null },
     exercises: {
       type: [workoutExerciseSchema],
       validate: [(v: unknown[]) => v.length > 0, "A workout needs at least one exercise"],
@@ -52,6 +55,8 @@ const workoutSchema = new Schema(
 workoutSchema.index({ user: 1, date: -1 });
 // Progress / "previous performance": all workouts containing an exercise.
 workoutSchema.index({ user: 1, "exercises.exercise": 1, date: -1 });
+// Routines page: the latest workout per routine.
+workoutSchema.index({ user: 1, routine: 1, date: -1 });
 
 export type Workout = InferSchemaType<typeof workoutSchema>;
 export const WorkoutModel = model("Workout", workoutSchema);

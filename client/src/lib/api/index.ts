@@ -3,6 +3,7 @@ export { ApiError, request, SESSION_EXPIRED_PATH } from "./client";
 export {
   authApi,
   exercisesApi,
+  routinesApi,
   statsApi,
   workoutsApi,
   type ExerciseInput,

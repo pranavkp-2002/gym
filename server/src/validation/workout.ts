@@ -18,6 +18,8 @@ export const workoutInputSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   date: calendarDate,
   notes: z.string().trim().max(2000).default(""),
+  /** Routine the workout was started from; null/omitted = none. */
+  routine: objectId.nullable().default(null),
   exercises: z
     .array(
       z.object({
@@ -30,6 +32,7 @@ export const workoutInputSchema = z.object({
 });
 
 export const listWorkoutsQuery = z.object({
+  routine: objectId.optional(),
   from: calendarDate.optional(),
   to: calendarDate.optional(),
   page: z.coerce.number().int().min(1).default(1),

@@ -41,11 +41,17 @@ export async function Dashboard() {
       <div className="rounded-lg border border-dashed border-border p-10 text-center">
         <p className="font-medium">No workouts yet</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Log your first workout and your stats will show up here.
+          Set up your split as routines, then start one each session. Your stats will show up here.
         </p>
-        <Link href="/log" className={cn(buttonVariants(), "mt-4")}>
-          <Plus /> Log a workout
+        <Link href="/routines/new" className={cn(buttonVariants(), "mt-4")}>
+          <Plus /> Create your first routine
         </Link>
+        <p className="mt-3 text-xs text-muted-foreground">
+          or{" "}
+          <Link href="/log" className="underline underline-offset-2 hover:text-foreground">
+            log an empty workout
+          </Link>
+        </p>
       </div>
     );
   }

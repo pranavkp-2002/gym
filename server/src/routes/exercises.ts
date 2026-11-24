@@ -3,6 +3,7 @@ import { Types } from "mongoose";
 import { userIdOf } from "../middleware/auth.js";
 import { CATEGORIES, EQUIPMENT, MUSCLE_GROUPS } from "../models/constants.js";
 import { ExerciseModel } from "../models/Exercise.js";
+import { RoutineModel } from "../models/Routine.js";
 import { UserModel } from "../models/User.js";
 import { WorkoutModel } from "../models/Workout.js";
 import { visibleExercisesFilter } from "../services/visibility.js";
@@ -114,6 +115,10 @@ exercisesRouter.delete("/:id", async (req, res) => {
   if (inUse) throw new HttpError(409, "This exercise is used in a workout and can't be deleted");
 
   await exercise.deleteOne();
+  await RoutineModel.updateMany(
+    { user: userId },
+    { $pull: { exercises: { exercise: exercise._id } } }
+  );
   await UserModel.updateOne({ _id: userId }, { $pull: { hiddenExercises: exercise._id } });
   res.status(204).end();
 });

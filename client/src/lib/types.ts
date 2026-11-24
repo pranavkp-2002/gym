@@ -35,6 +35,15 @@ export type WorkoutSummary = {
   setCount: number;
   volume: number;
   exerciseNames: string[];
+  routine: RoutineRef | null;
+};
+
+/** The routine a workout was started from. */
+export type RoutineRef = {
+  id: string;
+  name: string;
+  /** The routine's exercises when the workout was started (only in a fresh draft). */
+  exerciseIds?: string[];
 };
 
 export type WorkoutList = {
@@ -50,6 +59,15 @@ export type WorkoutDetail = {
   date: string;
   notes: string;
   volume: number;
+  routine: RoutineRef | null;
+  /** The previous workout from the same routine, for comparison. */
+  previousInRoutine: {
+    id: string;
+    date: string;
+    volume: number;
+    /** Keyed by exercise id. */
+    sets: Record<string, WorkoutSet[]>;
+  } | null;
   exercises: {
     exercise: Pick<Exercise, "id" | "name" | "muscleGroup" | "equipment" | "category"> | null;
     sets: WorkoutSet[];
@@ -61,7 +79,35 @@ export type WorkoutPayload = {
   name: string;
   date: string; // YYYY-MM-DD
   notes: string;
+  routine: string | null;
   exercises: { exercise: string; sets: WorkoutSet[] }[];
+};
+
+export type Routine = {
+  id: string;
+  name: string;
+  notes: string;
+  /** In order. `exercise` is null if it was deleted. */
+  exercises: {
+    exercise: Pick<Exercise, "id" | "name" | "muscleGroup" | "equipment" | "category"> | null;
+  }[];
+  /** Workouts logged from this routine. */
+  sessions: number;
+  lastWorkout: {
+    id: string;
+    date: string;
+    volume: number;
+    setCount: number;
+    /** That workout's sets, keyed by exercise id. */
+    sets: Record<string, WorkoutSet[]>;
+  } | null;
+};
+
+/** Body for POST/PUT /api/routines. */
+export type RoutinePayload = {
+  name: string;
+  notes: string;
+  exercises: { exercise: string }[];
 };
 
 /** Sets from the most recent workout containing an exercise, keyed by exercise id. */

@@ -46,6 +46,7 @@ export async function findWorkoutSummaries(
       "exercises.exercise",
       "name"
     )
+    .populate<{ routine: { _id: unknown; name: string } | null }>("routine", "name")
     .lean();
 
   return docs.map((w) => ({
@@ -56,5 +57,6 @@ export async function findWorkoutSummaries(
     setCount: w.exercises.reduce((n, e) => n + e.sets.length, 0),
     volume: volumeOf(w.exercises),
     exerciseNames: w.exercises.map((e) => e.exercise?.name ?? "Deleted exercise"),
+    routine: w.routine ? { id: String(w.routine._id), name: w.routine.name } : null,
   }));
 }

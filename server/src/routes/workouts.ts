@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { Types } from "mongoose";
 import { userIdOf } from "../middleware/auth.js";
-import { ExerciseModel } from "../models/Exercise.js";
+import { RoutineModel } from "../models/Routine.js";
 import { WorkoutModel } from "../models/Workout.js";
 import { findWorkoutSummaries, volumeOf } from "../services/workout-summary.js";
-import { visibleExercisesFilter } from "../services/visibility.js";
+import { assertExercisesVisible } from "../services/visibility.js";
 import { HttpError } from "../utils/http-error.js";
 import { listWorkoutsQuery, previousQuery, workoutInputSchema } from "../validation/workout.js";
 
@@ -15,21 +15,22 @@ export const workoutsRouter = Router();
 
 type SetLike = { reps: number; weight: number };
 
-/** Reject workouts that reference exercises the user can't see (or that don't exist). */
-async function assertExercisesExist(userId: Types.ObjectId, ids: string[]) {
-  const unique = [...new Set(ids)];
-  const found = await ExerciseModel.countDocuments({
-    _id: { $in: unique },
-    ...visibleExercisesFilter(userId),
-  });
-  if (found !== unique.length) throw new HttpError(400, "One or more exercises don't exist");
+/** Reject workouts that reference exercises or a routine the user can't see. */
+async function assertReferencesExist(
+  userId: Types.ObjectId,
+  data: { exercises: { exercise: string }[]; routine: string | null }
+) {
+  await assertExercisesVisible(userId, data.exercises.map((e) => e.exercise));
+  if (data.routine && !(await RoutineModel.exists({ _id: data.routine, user: userId })))
+    throw new HttpError(400, "That routine doesn't exist");
 }
 
-/** GET /api/workouts?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&limit=20 — newest first. */
+/** GET /api/workouts?from=YYYY-MM-DD&to=YYYY-MM-DD&routine=id&page=1&limit=20 — newest first. */
 workoutsRouter.get("/", async (req, res) => {
-  const { from, to, page, limit } = listWorkoutsQuery.parse(req.query);
+  const { from, to, routine, page, limit } = listWorkoutsQuery.parse(req.query);
 
   const filter: Record<string, unknown> = { user: userIdOf(req) };
+  if (routine) filter.routine = new Types.ObjectId(routine);
   if (from || to) {
     filter.date = {
       ...(from && { $gte: from }),
@@ -89,21 +90,49 @@ workoutsRouter.get("/previous", async (req, res) => {
   res.json(result);
 });
 
-/** GET /api/workouts/:id — full workout with exercise details. */
+/**
+ * GET /api/workouts/:id — full workout with exercise details. For a workout
+ * logged from a routine, `previousInRoutine` is the session of that routine
+ * just before it (for "vs last time" comparisons), or null.
+ */
 workoutsRouter.get("/:id", async (req, res) => {
-  const workout = await WorkoutModel.findOne({ _id: req.params.id, user: userIdOf(req) }).populate(
-    "exercises.exercise",
-    "name muscleGroup equipment category"
-  );
+  const userId = userIdOf(req);
+  const workout = await WorkoutModel.findOne({ _id: req.params.id, user: userId })
+    .populate("exercises.exercise", "name muscleGroup equipment category")
+    .populate("routine", "name");
   if (!workout) throw new HttpError(404, "Workout not found");
-  res.json({ ...workout.toJSON(), volume: volumeOf(workout.exercises) });
+
+  let previousInRoutine = null;
+  if (workout.routine) {
+    const prev = await WorkoutModel.findOne({
+      user: userId,
+      routine: workout.routine._id,
+      _id: { $ne: workout._id },
+      $or: [
+        { date: { $lt: workout.date } },
+        { date: workout.date, createdAt: { $lt: workout.createdAt } },
+      ],
+    })
+      .sort({ date: -1, createdAt: -1 })
+      .lean();
+    if (prev) {
+      previousInRoutine = {
+        id: String(prev._id),
+        date: prev.date,
+        volume: volumeOf(prev.exercises),
+        sets: Object.fromEntries(prev.exercises.map((e) => [String(e.exercise), e.sets])),
+      };
+    }
+  }
+
+  res.json({ ...workout.toJSON(), volume: volumeOf(workout.exercises), previousInRoutine });
 });
 
 /** POST /api/workouts */
 workoutsRouter.post("/", async (req, res) => {
   const data = workoutInputSchema.parse(req.body);
   const userId = userIdOf(req);
-  await assertExercisesExist(userId, data.exercises.map((e) => e.exercise));
+  await assertReferencesExist(userId, data);
   const workout = await WorkoutModel.create({ ...data, user: userId });
   res.status(201).json(workout);
 });
@@ -112,7 +141,7 @@ workoutsRouter.post("/", async (req, res) => {
 workoutsRouter.put("/:id", async (req, res) => {
   const data = workoutInputSchema.parse(req.body);
   const userId = userIdOf(req);
-  await assertExercisesExist(userId, data.exercises.map((e) => e.exercise));
+  await assertReferencesExist(userId, data);
   const workout = await WorkoutModel.findOneAndUpdate({ _id: req.params.id, user: userId }, data, {
     returnDocument: "after",
     runValidators: true,

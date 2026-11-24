@@ -6,15 +6,26 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { History, Plus, Trash2, X } from "lucide-react";
+import { Check, History, ListChecks, Pencil, Plus, Trash2, X } from "lucide-react";
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/form/native-select";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { setRoutineExercises } from "@/lib/actions/routines";
 import { getPreviousPerformance, saveWorkout } from "@/lib/actions/workouts";
+import { sameExercises } from "@/lib/routines";
 import { formatKg, formatSets, formatWorkoutDate, humanize } from "@/lib/format";
-import type { Exercise, PreviousPerformance } from "@/lib/types";
+import type { Exercise, PreviousPerformance, WorkoutPayload } from "@/lib/types";
 import {
   buildPayload,
   DRAFT_STORAGE_KEY as DRAFT_KEY,
@@ -22,19 +33,13 @@ import {
   emptyDraft,
   emptySet,
   isDraftEmpty,
+  localToday,
   newKey,
   parseStoredDraft,
   type Entry,
   type SetRow,
   type WorkoutDraft,
 } from "@/lib/workout-draft";
-
-
-function localToday() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 export function WorkoutForm({
   exercises,
@@ -55,6 +60,10 @@ export function WorkoutForm({
   const [restored, setRestored] = useState(false);
   const [loaded, setLoaded] = useState(isEdit);
   const [saving, startSaving] = useTransition();
+  /** Show the name/date inputs for a routine workout (collapsed into one line by default). */
+  const [editDetails, setEditDetails] = useState(false);
+  /** Set while asking "Also update the routine?" before saving. */
+  const [pendingSave, setPendingSave] = useState<WorkoutPayload | null>(null);
   /** Muscle group the "Add exercise" picker is narrowed to; "" = all. */
   const [muscleFilter, setMuscleFilter] = useState("");
   const requested = useRef(new Set<string>());
@@ -85,7 +94,8 @@ export function WorkoutForm({
     } catch {}
     if (saved && !isDraftEmpty(saved)) {
       setDraft(saved);
-      setRestored(true);
+      // A routine just started from the Routines page isn't "restored" work.
+      setRestored(!saved.entries.every((e) => e.autofill));
     } else {
       setDraft((d) => ({ ...d, date: d.date || localToday() }));
     }
@@ -106,6 +116,9 @@ export function WorkoutForm({
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setDraft(parseStoredDraft(current) ?? emptyDraft(localToday()));
         setRestored(false);
+        // A different draft: "last time" sets cached for the old one may be stale.
+        requested.current.clear();
+        setPrevious({});
         return;
       }
       const next = isDraftEmpty(draft) ? null : JSON.stringify(draft);
@@ -197,20 +210,40 @@ export function WorkoutForm({
   };
 
   // ---- save ----
+  /** The routine's exercises differ from this workout's (added or removed, not just reordered). */
+  const routineChanged = (payload: WorkoutPayload) =>
+    !isEdit &&
+    payload.routine !== null &&
+    draft.routine?.exerciseIds !== undefined &&
+    !sameExercises(draft.routine.exerciseIds, payload.exercises.map((e) => e.exercise));
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const result = buildPayload(draft, nameOf);
     if ("error" in result) return setError(result.error);
     setError(undefined);
+    if (routineChanged(result.payload)) return setPendingSave(result.payload);
+    save(result.payload, false);
+  };
 
+  const save = (payload: WorkoutPayload, updateRoutine: boolean) => {
+    setPendingSave(null);
     startSaving(async () => {
-      const res = await saveWorkout(result.payload, workoutId);
+      const res = await saveWorkout(payload, workoutId);
       if (res.error || !res.id) return setError(res.error ?? "Couldn't save the workout");
+      if (updateRoutine && payload.routine) {
+        // The workout is saved either way; a failed routine update isn't worth blocking on.
+        await setRoutineExercises(payload.routine, payload.exercises.map((e) => e.exercise));
+      }
       if (!isEdit) {
         // Start fresh next time: Next keeps this page mounted after navigating
         // away, so without this the saved workout would still be in the form.
         setDraft(emptyDraft(localToday()));
         setRestored(false);
+        setEditDetails(false);
+        // This save changes "last time" for its exercises.
+        requested.current.clear();
+        setPrevious({});
         try {
           localStorage.removeItem(DRAFT_KEY);
         } catch {}
@@ -221,6 +254,10 @@ export function WorkoutForm({
 
   const inWorkout = new Set(draft.entries.map((e) => e.exerciseId));
   const volume = draftVolume(draft);
+  const doneCount = draft.entries.filter((e) => e.done).length;
+  const trackDone = !isEdit && draft.entries.length > 0;
+  // A routine workout already has its name: show name + date as one line until "Edit".
+  const compactDetails = Boolean(draft.routine && draft.name.trim() && draft.date && !editDetails);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
@@ -233,7 +270,50 @@ export function WorkoutForm({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
+      {draft.routine && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <ListChecks className="size-4 shrink-0" />
+          <span className="min-w-0 truncate">
+            {compactDetails ? (
+              <>
+                <span className="font-medium text-foreground">{draft.name}</span> ·{" "}
+                {formatWorkoutDate(`${draft.date}T00:00:00Z`, "short")}
+              </>
+            ) : (
+              <>
+                From routine <span className="font-medium text-foreground">{draft.routine.name}</span>
+              </>
+            )}
+          </span>
+          {compactDetails && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setEditDetails(true)}
+              aria-label="Edit name and date"
+              title="Edit name and date"
+            >
+              <Pencil />
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => {
+              update({ routine: null });
+              setEditDetails(true);
+            }}
+            aria-label="Don't link this workout to the routine"
+            title="Unlink from routine"
+          >
+            <X />
+          </Button>
+        </div>
+      )}
+
+      <div className={cn("grid gap-4 sm:grid-cols-[1fr_12rem]", compactDetails && "hidden")}>
         <div className="space-y-1.5">
           <Label htmlFor="workout-name">Workout name</Label>
           <Input
@@ -262,12 +342,32 @@ export function WorkoutForm({
           <section
             key={entry.key}
             aria-label={exercise?.name}
-            className="rounded-lg border border-border"
+            className={cn("rounded-lg border border-border", entry.done && "bg-muted/30")}
           >
-            <header className="flex items-start gap-3 border-b border-border px-4 py-3">
+            <header
+              className={cn("flex items-start gap-3 px-4 py-3", !entry.done && "border-b border-border")}
+            >
+              {trackDone && (
+                <Button
+                  type="button"
+                  variant={entry.done ? "default" : "outline"}
+                  size="icon-sm"
+                  className="mt-0.5 rounded-full"
+                  onClick={() => updateEntry(entry.key, (e) => ({ ...e, done: !e.done }))}
+                  aria-pressed={Boolean(entry.done)}
+                  aria-label={`${exercise?.name ?? "Exercise"} done`}
+                  title={entry.done ? "Mark as not done" : "Mark as done"}
+                >
+                  <Check />
+                </Button>
+              )}
               <div className="min-w-0 flex-1">
                 <h3 className="truncate text-sm font-medium">{exercise?.name ?? "Exercise"}</h3>
-                {prev ? (
+                {entry.done ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                    {entry.sets.map((r) => `${r.weight || 0}×${r.reps || 0}`).join(", ")}
+                  </p>
+                ) : prev ? (
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                     <History className="size-3" />
                     Last time ({formatWorkoutDate(prev.date, "short")}): {formatSets(prev.sets)}
@@ -291,7 +391,7 @@ export function WorkoutForm({
               </Button>
             </header>
 
-            <div className="space-y-2 p-4">
+            <div className={cn("space-y-2 p-4", entry.done && "hidden")}>
               <div className="grid grid-cols-[2rem_1fr_1fr_2rem] gap-2 text-xs text-muted-foreground">
                 <span>Set</span>
                 <span>kg</span>
@@ -402,7 +502,10 @@ export function WorkoutForm({
             </p>
           ) : (
             <p className="text-muted-foreground tabular-nums">
-              {draft.entries.length} exercise{draft.entries.length === 1 ? "" : "s"} · {formatKg(volume)}
+              {trackDone
+                ? `${doneCount}/${draft.entries.length} done`
+                : `${draft.entries.length} exercise${draft.entries.length === 1 ? "" : "s"}`}{" "}
+              · {formatKg(volume)}
             </p>
           )}
         </div>
@@ -410,6 +513,24 @@ export function WorkoutForm({
           {saving ? "Saving…" : isEdit ? "Save changes" : "Save workout"}
         </Button>
       </div>
+
+      <AlertDialog open={pendingSave !== null} onOpenChange={(open) => !open && setPendingSave(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Also update &ldquo;{draft.routine?.name}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You added or removed exercises. Update the routine so next time starts with this
+              workout&apos;s exercises?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" onClick={() => pendingSave && save(pendingSave, false)}>
+              Just save workout
+            </Button>
+            <Button onClick={() => pendingSave && save(pendingSave, true)}>Update routine</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }

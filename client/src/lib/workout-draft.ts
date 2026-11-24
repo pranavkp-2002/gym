@@ -2,7 +2,7 @@
 // Server Components (edit page) and the Client Component can both use them.
 
 import { toDateInput } from "./format";
-import type { WorkoutDetail, WorkoutPayload } from "./types";
+import type { Routine, RoutineRef, WorkoutDetail, WorkoutPayload } from "./types";
 
 /** localStorage key for the unsaved workout. Cleared on logout. */
 export const DRAFT_STORAGE_KEY = "gym:workout-draft";
@@ -15,8 +15,24 @@ export type Entry = {
   sets: SetRow[];
   /** True until the user edits the sets: allows pre-filling from last time. */
   autofill?: boolean;
+  /** Ticked off in the logger. Progress only; not saved with the workout. */
+  done?: boolean;
 };
-export type WorkoutDraft = { name: string; date: string; notes: string; entries: Entry[] };
+export type WorkoutDraft = {
+  name: string;
+  date: string;
+  notes: string;
+  entries: Entry[];
+  /** Set when the workout was started from a routine. */
+  routine?: RoutineRef | null;
+};
+
+/** Today in the browser's timezone, as YYYY-MM-DD. Client-only. */
+export function localToday() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 // React keys only; never rendered, so server/client differences don't matter.
 let counter = 0;
@@ -36,6 +52,7 @@ export function draftFromWorkout(w: WorkoutDetail): WorkoutDraft {
     name: w.name,
     date: toDateInput(w.date),
     notes: w.notes,
+    routine: w.routine,
     entries: w.exercises
       .filter((e) => e.exercise) // skip exercises that were deleted
       .map((e) => ({
@@ -43,6 +60,26 @@ export function draftFromWorkout(w: WorkoutDetail): WorkoutDraft {
         exerciseId: e.exercise!.id,
         sets: e.sets.map((s) => ({ key: newKey(), reps: String(s.reps), weight: String(s.weight) })),
       })),
+  };
+}
+
+/**
+ * A fresh workout from a routine: its name and exercises, each with one empty
+ * set marked `autofill`, so the logger fills in that exercise's last sets.
+ */
+export function draftFromRoutine(r: Routine, date: string): WorkoutDraft {
+  return {
+    name: r.name,
+    date,
+    notes: "",
+    routine: {
+      id: r.id,
+      name: r.name,
+      exerciseIds: r.exercises.flatMap((e) => (e.exercise ? [e.exercise.id] : [])),
+    },
+    entries: r.exercises
+      .filter((e) => e.exercise) // skip exercises that were deleted
+      .map((e) => ({ key: newKey(), exerciseId: e.exercise!.id, sets: [emptySet()], autofill: true })),
   };
 }
 
@@ -77,7 +114,13 @@ export function buildPayload(
   }
 
   return {
-    payload: { name: draft.name.trim(), date: draft.date, notes: draft.notes.trim(), exercises },
+    payload: {
+      name: draft.name.trim(),
+      date: draft.date,
+      notes: draft.notes.trim(),
+      routine: draft.routine?.id ?? null,
+      exercises,
+    },
   };
 }
 

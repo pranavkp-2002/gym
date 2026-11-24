@@ -19,6 +19,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Delete",
+  confirmVariant = "destructive",
   onConfirm,
 }: {
   /** The button that opens the dialog (rendered via Base UI's `render` prop). */
@@ -26,6 +27,8 @@ export function ConfirmDialog({
   title: string;
   description?: string;
   confirmLabel?: string;
+  /** "default" for confirmations that don't destroy anything permanent. */
+  confirmVariant?: "destructive" | "default";
   onConfirm: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -41,7 +44,7 @@ export function ConfirmDialog({
         <AlertDialogFooter>
           <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
           <Button
-            variant="destructive"
+            variant={confirmVariant}
             onClick={() => {
               setOpen(false);
               onConfirm();

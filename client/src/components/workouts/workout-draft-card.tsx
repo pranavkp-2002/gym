@@ -12,40 +12,15 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { saveWorkout } from "@/lib/actions/workouts";
 import { formatKg } from "@/lib/format";
+import { readDraftRaw, subscribeDraft, writeDraft } from "./draft-storage";
 import {
   buildPayload,
-  DRAFT_STORAGE_KEY,
   draftVolume,
   parseStoredDraft,
   type WorkoutDraft,
 } from "@/lib/workout-draft";
 
-const CHANGE_EVENT = "gym:workout-draft-change";
-
-/** Re-render on changes from this card or from other tabs. */
-function subscribe(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  window.addEventListener(CHANGE_EVENT, onChange);
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener(CHANGE_EVENT, onChange);
-  };
-}
-
-function readRaw(): string | null {
-  try {
-    return localStorage.getItem(DRAFT_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function clearDraft() {
-  try {
-    localStorage.removeItem(DRAFT_STORAGE_KEY);
-  } catch {}
-  window.dispatchEvent(new Event(CHANGE_EVENT));
-}
+const clearDraft = () => writeDraft(null);
 
 /**
  * The in-progress workout from the logger, shown once it has at least one
@@ -55,7 +30,7 @@ export function WorkoutDraftCard({ exerciseNames }: { exerciseNames: Record<stri
   const router = useRouter();
   // Server render: no draft (storage is browser-only). Re-read on every show,
   // since Next keeps this page mounted while you're on /log.
-  const raw = useSyncExternalStore(subscribe, readRaw, () => null);
+  const raw = useSyncExternalStore(subscribeDraft, readDraftRaw, () => null);
   const draft = useMemo<WorkoutDraft | null>(() => parseStoredDraft(raw), [raw]);
   // Tied to the draft it was raised for, so it disappears once the draft changes.
   const [failure, setFailure] = useState<{ raw: string | null; message: string }>();

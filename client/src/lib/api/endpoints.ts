@@ -8,6 +8,8 @@ import type {
   ExerciseProgress,
   PreviousPerformance,
   RecordRow,
+  Routine,
+  RoutinePayload,
   WorkoutDetail,
   WorkoutList,
   WorkoutPayload,
@@ -62,7 +64,9 @@ export const exercisesApi = {
 };
 
 export const workoutsApi = {
-  list: (params: { from?: string; to?: string; page?: number; limit?: number } = {}) =>
+  list: (
+    params: { from?: string; to?: string; routine?: string; page?: number; limit?: number } = {}
+  ) =>
     request<WorkoutList>("GET", "/api/workouts", { query: params }),
 
   get: (id: string) => request<WorkoutDetail>("GET", `/api/workouts/${seg(id)}`),
@@ -80,6 +84,30 @@ export const workoutsApi = {
     request<PreviousPerformance>("GET", "/api/workouts/previous", {
       query: { exercises: exerciseIds.join(","), excludeWorkout },
     }),
+};
+
+export const routinesApi = {
+  list: () => request<Routine[]>("GET", "/api/routines"),
+
+  get: (id: string) => request<Routine>("GET", `/api/routines/${seg(id)}`),
+
+  create: (payload: RoutinePayload) =>
+    request<{ id: string }>("POST", "/api/routines", { body: payload }),
+
+  update: (id: string, payload: RoutinePayload) =>
+    request<{ id: string }>("PUT", `/api/routines/${seg(id)}`, { body: payload }),
+
+  /** Replace only the exercise list (name and notes kept). */
+  setExercises: (id: string, exerciseIds: string[]) =>
+    request<{ id: string }>("PUT", `/api/routines/${seg(id)}/exercises`, {
+      body: { exercises: exerciseIds.map((exercise) => ({ exercise })) },
+    }),
+
+  remove: (id: string) => request("DELETE", `/api/routines/${seg(id)}`),
+
+  /** Copy a logged workout's name and exercises into a new routine, linked to it. */
+  fromWorkout: (workoutId: string) =>
+    request<{ id: string }>("POST", `/api/routines/from-workout/${seg(workoutId)}`),
 };
 
 export const statsApi = {
